@@ -5,7 +5,7 @@ import os
 import numpy as np
 import scipy.io as sio
 import sklearn.metrics
-import cPickle as pickle
+import pickle
 
 
 def load_data(data_path):

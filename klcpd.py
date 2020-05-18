@@ -3,7 +3,7 @@
 
 from __future__ import print_function
 import argparse
-import cPickle as pickle
+import pickle
 import math
 import numpy as np
 import os
@@ -182,7 +182,7 @@ print(netG)
 print(netD)
 print('netG has number of parameters: %d' % (netG_params_count))
 print('netD has number of parameters: %d' % (netD_params_count))
-one = torch.cuda.FloatTensor([1])
+one = torch.tensor(1, dtype=torch.float).cuda()
 mone = one * -1
 
 
@@ -206,7 +206,8 @@ optimizerD = Optim(netD.parameters(),
 #sigma_list = [1.0]
 #sigma_list = mmd_util.median_heuristic(Data.Y_subspace, beta=1.)
 sigma_list = mmd_util.median_heuristic(Data.Y_subspace, beta=.5)
-sigma_var = torch.FloatTensor(sigma_list).cuda()
+# sigma_var = torch.FloatTensor(sigma_list).cuda()
+sigma_var = torch.tensor(sigma_list, dtype=torch.float).cuda()
 print('sigma_list:', sigma_var)
 
 
@@ -231,6 +232,7 @@ best_mmd_real = 1e+6
 start_time = time.time()
 print('start training: lambda_ae', lambda_ae, 'lambda_real', lambda_real, 'weight_clip', args.weight_clip)
 for epoch in range(1, args.max_iter + 1):
+    netD.train()
     trn_loader = Data.get_batches(Data.trn_set, batch_size=args.batch_size, shuffle=True)
     bidx = 0
     while bidx < n_batchs:
@@ -258,7 +260,8 @@ for epoch in range(1, args.max_iter + 1):
 
             # fake data
             noise = torch.cuda.FloatTensor(1, batch_size, args.RNN_hid_dim).normal_(0, 1)
-            noise = Variable(noise, volatile=True) # total freeze netG
+            with torch.no_grad():
+                noise = Variable(noise) # total freeze netG
             Y_f = Variable(netG(X_p, X_f, noise).data)
             Y_f_enc, Y_f_dec = netD(Y_f)
 
@@ -320,8 +323,8 @@ for epoch in range(1, args.max_iter + 1):
 
         print('[%5d/%5d] [%5d/%5d] [%6d] D_mmd2 %.4e G_mmd2 %.4e mmd2_real %.4e real_L2 %.6f fake_L2 %.6f'
               % (epoch, args.max_iter, bidx, n_batchs, gen_iterations,
-                 D_mmd2.mean().data[0], G_mmd2.mean().data[0], mmd2_real.mean().data[0],
-                 real_L2_loss.data[0], fake_L2_loss.data[0]))
+                 D_mmd2.mean().data, G_mmd2.mean().data, mmd2_real.mean().data,
+                 real_L2_loss.data, fake_L2_loss.data))
 
         if gen_iterations % args.eval_freq == 0:
             # ========= Main block for evaluate MMD(X_p_enc, X_f_enc) on RNN codespace  =========#
@@ -336,8 +339,8 @@ for epoch in range(1, args.max_iter + 1):
             assert(np.isnan(val_dict['auc']) != True)
             #if val_dict['auc'] > best_val_auc:
             #if val_dict['auc'] > best_val_auc and mmd2_real.mean().data[0] < best_mmd_real:
-            if mmd2_real.mean().data[0] < best_mmd_real:
-                best_mmd_real = mmd2_real.mean().data[0]
+            if mmd2_real.mean().data < best_mmd_real:
+                best_mmd_real = mmd2_real.mean().data
                 best_val_mae = val_dict['mae']
                 best_val_auc = val_dict['auc']
                 best_tst_auc = tst_dict['auc']
@@ -351,5 +354,5 @@ for epoch in range(1, args.max_iter + 1):
 
         # stopping condition
         #if best_mmd_real < 1e-4:
-        if mmd2_real.mean().data[0] < 1e-5:
+        if mmd2_real.mean().data < 1e-5:
             exit(0)
